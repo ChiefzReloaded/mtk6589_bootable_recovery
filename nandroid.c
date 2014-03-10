@@ -20,6 +20,8 @@
 #include <signal.h>
 #include <sys/wait.h>
 
+#include "libcrecovery/common.h"
+
 #include "bootloader.h"
 #include "common.h"
 #include "cutils/properties.h"
@@ -39,7 +41,7 @@
 #include "flashutils/flashutils.h"
 #include <libgen.h>
 
-void nandroid_generate_timestamp_path(char* backup_path)
+void nandroid_generate_timestamp_path(const char* backup_path)
 {
     time_t t = time(NULL);
     struct tm *tmp = localtime(&t);
@@ -62,7 +64,7 @@ static void ensure_directory(const char* dir) {
 }
 
 static int print_and_error(const char* message) {
-    ui_print("%s\n", message);
+    ui_print("%s", message);
     return 1;
 }
 
@@ -375,8 +377,10 @@ int nandroid_backup(const char* backup_path)
     if (0 != (ret = nandroid_backup_partition(backup_path, "/boot")))
         return ret;
         
+#ifdef BOARD_HAS_MTK
     if (0 != (ret = nandroid_backup_partition(backup_path, "/uboot")))
-        return ret;    
+        return ret;  
+#endif
 
     if (0 != (ret = nandroid_backup_partition(backup_path, "/recovery")))
         return ret;
@@ -585,7 +589,7 @@ int nandroid_restore_partition_extended(const char* backup_path, const char* mou
     char* name = basename(mount_point);
 
     nandroid_restore_handler restore_handler = NULL;
-    const char *filesystems[] = { "yaffs2", "ext2", "ext3", "ext4", "vfat", "rfs", "f2fs", NULL };
+    const char *filesystems[] = { "yaffs2", "ext2", "ext3", "ext4", "vfat", "rfs", NULL };
     const char* backup_filesystem = NULL;
     Volume *vol = volume_for_path(mount_point);
     const char *device = NULL;
@@ -605,7 +609,7 @@ int nandroid_restore_partition_extended(const char* backup_path, const char* mou
         // can't find the backup, it may be the new backup format?
         // iterate through the backup types
         printf("couldn't find default\n");
-        const char *filesystem;
+        char *filesystem;
         int i = 0;
         while ((filesystem = filesystems[i]) != NULL) {
             sprintf(tmp, "%s/%s.%s.img", backup_path, name, filesystem);
@@ -725,7 +729,7 @@ int nandroid_restore_partition(const char* backup_path, const char* root) {
 
         ui_print("Restoring %s image...\n", name);
         if (0 != (ret = restore_raw_partition(vol->fs_type, vol->device, tmp))) {
-            ui_print("Error while flashing %s image!\n", name);
+            ui_print("Error while flashing %s image!", name);
             return ret;
         }
         return 0;
@@ -733,7 +737,7 @@ int nandroid_restore_partition(const char* backup_path, const char* root) {
     return nandroid_restore_partition_extended(backup_path, root, 1);
 }
 
-int nandroid_restore(const char* backup_path, int restore_boot, int restore_system, int restore_data, int restore_cache, int restore_sdext, int restore_wimax, int restore_uboot)
+int nandroid_restore(const char* backup_path, int restore_boot, int restore_system, int restore_data, int restore_cache, int restore_sdext, int restore_wimax)
 {
     ui_set_background(BACKGROUND_ICON_INSTALLING);
     ui_show_indeterminate_progress();
@@ -750,11 +754,22 @@ int nandroid_restore(const char* backup_path, int restore_boot, int restore_syst
         return print_and_error("MD5 mismatch!\n");
 
     int ret;
-
-    if (restore_boot && NULL != volume_for_path("/boot") && 0 != (ret = nandroid_restore_partition(backup_path, "/boot")))
-        return ret;
-    if (restore_uboot && NULL != volume_for_path("/uboot") && 0 != (ret = nandroid_restore_partition(backup_path, "/uboot")))
-        return ret;    
+	struct stat st;
+	sprintf(tmp, "%s/boot.img", backup_path);
+	
+	if (restore_boot && (stat(tmp, &st) == 0)) 
+    {
+	    if (NULL != volume_for_path("/boot") && 0 != (ret = nandroid_restore_partition(backup_path, "/boot")))
+            return ret;
+            
+#ifdef BOARD_HAS_MTK
+        if (NULL != volume_for_path("/uboot") && 0 != (ret = nandroid_restore_partition(backup_path, "/uboot")))
+            return ret;
+#endif            
+    } 
+    else {
+		ui_print("No boot image present, skipping...\n");
+	}
 
     struct stat s;
     Volume *vol = volume_for_path("/wimax");
@@ -921,7 +936,7 @@ int nandroid_main(int argc, char** argv)
     {
         if (argc != 3)
             return nandroid_usage();
-        return nandroid_restore(argv[2], 1, 1, 1, 1, 1, 0, 0);
+        return nandroid_restore(argv[2], 1, 1, 1, 1, 1, 0);
     }
     
     if (strcmp("dump", argv[1]) == 0)

@@ -40,6 +40,7 @@
 #include "mtdutils/mtdutils.h"
 #include "bmlutils/bmlutils.h"
 #include "cutils/android_reboot.h"
+#include "mmcutils/mmcutils.h"
 
 #include "adb_install.h"
 
@@ -271,7 +272,7 @@ char** gather_files(const char* directory, const char* fileExtensionOrDirectory,
     }
 
     if(closedir(dir) < 0) {
-        LOGE("Failed to close directory.\n");
+        LOGE("Failed to close directory.");
     }
 
     if (total==0) {
@@ -418,7 +419,7 @@ void show_nandroid_restore_menu(const char* path)
         return;
 
     if (confirm_selection("Confirm restore?", "Yes - Restore"))
-        nandroid_restore(file, 1, 1, 1, 1, 1, 0, 0);
+        nandroid_restore(file, 1, 1, 1, 1, 1, 0);
 }
 
 void show_nandroid_delete_menu(const char* path)
@@ -725,16 +726,6 @@ int format_device(const char *device, const char *path, const char *fs_type) {
         return 0;
     }
 
-#ifdef USE_F2FS
-    if (strcmp(fs_type, "f2fs") == 0) {
-        int result = make_f2fs_main(device, v->mount_point);
-        if (result != 0) {
-            LOGE("format_volume: mkfs.f2f2 failed on %s\n", device);
-            return -1;
-        }
-        return 0;
-    }
-#endif
     return format_unknown_device(device, path, fs_type);
 }
 
@@ -836,7 +827,7 @@ int is_safe_to_format(char* name)
 {
     char str[255];
     char* partition;
-    property_get("ro.cwm.forbid_format", str, "/misc,/radio,/bootloader,/recovery,/efs,/wimax");
+    property_get("ro.cwm.forbid_format", str, "/misc,/nvram,/radio,/bootloader,/recovery,/efs,/wimax");
 
     partition = strtok(str, ", ");
     while (partition != NULL) {
@@ -1038,27 +1029,27 @@ void show_nandroid_advanced_restore_menu(const char* path)
     {
         case 0:
             if (confirm_selection(confirm_restore, "Yes - Restore boot"))
-                nandroid_restore(file, 1, 0, 0, 0, 0, 0, 0);
+                nandroid_restore(file, 1, 0, 0, 0, 0, 0);
             break;
         case 1:
             if (confirm_selection(confirm_restore, "Yes - Restore system"))
-                nandroid_restore(file, 0, 1, 0, 0, 0, 0, 0);
+                nandroid_restore(file, 0, 1, 0, 0, 0, 0);
             break;
         case 2:
             if (confirm_selection(confirm_restore, "Yes - Restore data"))
-                nandroid_restore(file, 0, 0, 1, 0, 0, 0, 0);
+                nandroid_restore(file, 0, 0, 1, 0, 0, 0);
             break;
         case 3:
             if (confirm_selection(confirm_restore, "Yes - Restore cache"))
-                nandroid_restore(file, 0, 0, 0, 1, 0, 0, 0);
+                nandroid_restore(file, 0, 0, 0, 1, 0, 0);
             break;
         case 4:
             if (confirm_selection(confirm_restore, "Yes - Restore sd-ext"))
-                nandroid_restore(file, 0, 0, 0, 0, 1, 0, 0);
+                nandroid_restore(file, 0, 0, 0, 0, 1, 0);
             break;
         case 5:
             if (confirm_selection(confirm_restore, "Yes - Restore wimax"))
-                nandroid_restore(file, 0, 0, 0, 0, 0, 1, 0);
+                nandroid_restore(file, 0, 0, 0, 0, 0, 1);
             break;
     }
 }
@@ -1134,17 +1125,17 @@ void show_nandroid_menu()
     char *other_sd = NULL;
     if (volume_for_path("/emmc") != NULL) {
         other_sd = "/emmc";
-        list[6] = "backup to internal_sd";
-        list[7] = "restore from internal_sd";
-        list[8] = "adv. rest. from internal_sd";
-        list[9] = "delete from internal_sd";
+        list[6] = "backup to internal sdcard";
+        list[7] = "restore from internal sdcard";
+        list[8] = "advanced restore from internal sdcard";
+        list[9] = "delete from internal sdcard";
     }
     else if (volume_for_path("/external_sd") != NULL) {
         other_sd = "/external_sd";
-        list[6] = "backup to external_sd";
-        list[7] = "restore from external_sd";
-        list[8] = "adv. rest. from external_sd";
-        list[9] = "delete from external_sd";
+        list[6] = "backup to external sdcard";
+        list[7] = "restore from external sdcard";
+        list[8] = "advanced restore from external sdcard";
+        list[9] = "delete from external sdcard";
     }
 #ifdef RECOVERY_EXTEND_NANDROID_MENU
     extend_nandroid_menu(list, 10, sizeof(list) / sizeof(char*));
@@ -1343,8 +1334,8 @@ void show_advanced_menu()
                             "key test",
                             "show log",
                             "partition sdcard",
-                            "partition external_sd",
-                            "partition internal_sd",
+                            "partition external sdcard",
+                            "partition internal sdcard",
                             NULL
     };
 
@@ -1549,7 +1540,7 @@ void process_volumes() {
     ui_print("in case of error.\n");
 
     nandroid_backup(backup_path);
-    nandroid_restore(backup_path, 1, 1, 1, 1, 1, 0, 0);
+    nandroid_restore(backup_path, 1, 1, 1, 1, 1, 0);
     ui_set_show_text(0);
 }
 
@@ -1601,8 +1592,6 @@ int volume_main(int argc, char **argv) {
 }
 
 int verify_root_and_recovery() {
-    write_recovery_version();
-	
     if (ensure_path_mounted("/system") != 0)
         return 0;
 

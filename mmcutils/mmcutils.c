@@ -42,7 +42,7 @@
 #include "mmcutils.h"
 
 #define XSTR(x) #x
-#define STR(x) XSTR(x)
+#define STR(x) XSTR(x) 
 
 unsigned ext3_count = 0;
 char *ext3_partitions[] = {"system", "userdata", "cache", "NONE"};
@@ -474,7 +474,7 @@ ERROR3:
 
 
 int
-mmc_raw_dump_internal (const char* in_file, const char *out_file, unsigned size) {
+mmc_raw_dump_internal (const char* in_file, const char *out_file, unsigned sz) {
     int ch;
     FILE *in;
     FILE *out;
@@ -491,26 +491,28 @@ mmc_raw_dump_internal (const char* in_file, const char *out_file, unsigned size)
     if (out == NULL)
         goto ERROR2;
 
-    if (size == 0)
+    if (sz == 0)
     {
         fseek(in, 0L, SEEK_END);
-        size = ftell(in);
+        sz = ftell(in);
         fseek(in, 0L, SEEK_SET);
     }
 
-    if (size % 512)
+    if (sz % 512)
     {
         unsigned counter = 0;
         while ( ( ch = fgetc ( in ) ) != EOF )
         {
             fputc ( ch, out );
-            if (++counter == size)
+#ifdef BOARD_HAS_MTK
+            if (++counter == sz)
                 break;
+#endif
         }
     }
     else
     {
-        for (i=0; i< (size/512); i++)
+        for (i=0; i< (sz/512); i++)
         {
             if ((fread(buf, 512, 1, in)) != 1)
                 goto ERROR1;
@@ -618,32 +620,32 @@ int cmd_mmc_backup_raw_partition(const char *partition, const char *filename)
             return -1;
         return mmc_raw_dump(p, filename);
     }
-    else {
-        unsigned size = 0;
+    else 
+    {
+        unsigned sz = 0;
 
-        // take boot and recovery partition sizes into account if defined
-#if defined(CWM_EMMC_BOOT_DEVICE_NAME) && defined(CWM_EMMC_BOOT_DEVICE_SIZE)
-        if (strcmp(partition, STR(CWM_EMMC_BOOT_DEVICE_NAME)) == 0) {
-            size = CWM_EMMC_BOOT_DEVICE_SIZE;
-            printf("CWM_EMMC_BOOT_DEVICE: %s; Size: 0x%x\n", partition, size);
+#if defined(MTK_BOOT_DEVICE_NAME) && defined(MTK_BOOT_DEVICE_SIZE)
+        if (strcmp(partition, STR(MTK_BOOT_DEVICE_NAME)) == 0) {
+            sz = MTK_BOOT_DEVICE_SIZE;
+            printf("MTK_BOOT_DEVICE: %s; Size: 0x%x\n", partition, sz);
         }
 #endif
 
-#if defined(CWM_EMMC_RECOVERY_DEVICE_NAME) && defined(CWM_EMMC_RECOVERY_DEVICE_SIZE)
-        if (strcmp(partition, STR(CWM_EMMC_RECOVERY_DEVICE_NAME)) == 0) {
-            size = CWM_EMMC_RECOVERY_DEVICE_SIZE;
-            printf("CWM_EMMC_RECOVERY_DEVICE: %s; Size: 0x%x\n", partition, size);
+#if defined(MTK_RECOVERY_DEVICE_NAME) && defined(MTK_RECOVERY_DEVICE_SIZE)
+        if (strcmp(partition, STR(MTK_RECOVERY_DEVICE_NAME)) == 0) {
+            sz = MTK_RECOVERY_DEVICE_SIZE;
+            printf("MTK_RECOVERY_DEVICE: %s; Size: 0x%x\n", partition, sz);
         }
 #endif
 
-#if defined(CWM_EMMC_UBOOT_DEVICE_NAME) && defined(CWM_EMMC_UBOOT_DEVICE_SIZE)
-        if (strcmp(partition, STR(CWM_EMMC_UBOOT_DEVICE_NAME)) == 0) {
-            size = CWM_EMMC_UBOOT_DEVICE_SIZE;
-            printf("CWM_EMMC_UBOOT_DEVICE: %s; Size: 0x%x\n", partition, size);
+#if defined(MTK_UBOOT_DEVICE_NAME) && defined(MTK_UBOOT_DEVICE_SIZE)
+        if (strcmp(partition, STR(MTK_UBOOT_DEVICE_NAME)) == 0) {
+            sz = MTK_UBOOT_DEVICE_SIZE;
+            printf("MTK_UBOOT_DEVICE: %s; Size: 0x%x\n", partition, sz);
         }
 #endif
-
-        return mmc_raw_dump_internal(partition, filename, size);
+        
+        return mmc_raw_dump_internal(partition, filename, sz);
     }
 }
 

@@ -43,6 +43,7 @@
 
 #include "adb_install.h"
 #include "minadbd/adb.h"
+
 #include "firmware.h"
 #include "extendedcommands.h"
 #include "flashutils/flashutils.h"
@@ -500,7 +501,7 @@ get_menu_selection(char** headers, char** items, int menu_only,
         } else if (!menu_only) {
             chosen_item = action;
         }
-        
+
         if (abs(selected - old_selected) > 1) {
             wrap_count++;
             if (wrap_count == 5) {
@@ -785,6 +786,7 @@ setup_adbd() {
 
 // call a clean reboot
 void reboot_main_system(int cmd, int flags, char *arg) {
+    write_recovery_version();
     verify_root_and_recovery();
     finish_recovery(NULL); // sync() in here
     android_reboot(cmd, flags, arg);
@@ -854,7 +856,7 @@ main(int argc, char **argv) {
     // If these fail, there's not really anywhere to complain...
     freopen(TEMPORARY_LOG_FILE, "a", stdout); setbuf(stdout, NULL);
     freopen(TEMPORARY_LOG_FILE, "a", stderr); setbuf(stderr, NULL);
-    printf("Starting recovery on %s\n", ctime(&start));
+    printf("Starting recovery on %s", ctime(&start));
 
     device_ui_init(&ui_parameters);
     ui_init();
@@ -906,7 +908,7 @@ main(int argc, char **argv) {
 
     if (!sehandle) {
         fprintf(stderr, "Warning: No file_contexts\n");
-        // ui_print("Warning:  No file_contexts\n");
+        LOGI("Warning:  No file_contexts\n");
     }
 
     LOGI("device_recovery_start()\n");
@@ -953,6 +955,14 @@ main(int argc, char **argv) {
     } else if (wipe_cache) {
         if (wipe_cache && erase_volume("/cache")) status = INSTALL_ERROR;
         if (status != INSTALL_SUCCESS) ui_print("Cache wipe failed.\n");
+    } else if (sideload) {
+        signature_check_enabled = 0;
+        if (!headless)
+          ui_set_show_text(1);
+        if (0 == apply_from_adb()) {
+            status = INSTALL_SUCCESS;
+            ui_set_show_text(0);
+        }
     } else {
         LOGI("Checking for extendedcommand...\n");
         status = INSTALL_ERROR;  // No command specified
@@ -981,16 +991,6 @@ main(int argc, char **argv) {
         }
     }
 
-    if (sideload) {
-        signature_check_enabled = 0;
-        if (!headless)
-            ui_set_show_text(1);
-        if (0 == apply_from_adb()) {
-            status = INSTALL_SUCCESS;
-            ui_set_show_text(0);
-        }
-    }
-
     setup_adbd();
 
     if (headless) {
@@ -1015,11 +1015,11 @@ main(int argc, char **argv) {
     sync();
     if(!poweroff) {
         ui_print("Rebooting...\n");
-        android_reboot(ANDROID_RB_RESTART, 0, 0);
+        reboot_main_system(ANDROID_RB_RESTART, 0, 0);
     }
     else {
         ui_print("Shutting down...\n");
-        android_reboot(ANDROID_RB_POWEROFF, 0, 0);
+        reboot_main_system(ANDROID_RB_POWEROFF, 0, 0);
     }
     return EXIT_SUCCESS;
 }
